@@ -7,23 +7,8 @@ pub use crate::handler::{BoxedMessageHandler, MessageHandler, MessageHandlerResu
 
 use crate::{Actor, ActorContext};
 
-#[derive(Debug)]
-pub struct MailboxReceiver<A: Actor> {
-    inner: mpsc::Receiver<BoxedMessageHandler<A>>,
-}
-
-#[derive(Debug)]
-pub struct MailboxSender<A: Actor> {
-    pub(crate) inner: mpsc::Sender<BoxedMessageHandler<A>>,
-}
-
-impl<A: Actor> Clone for MailboxSender<A> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
-    }
-}
+pub type MailboxReceiver<A: Actor> = mpsc::Receiver<BoxedMessageHandler<A>>;
+pub type MailboxSender<A: Actor> = mpsc::Sender<BoxedMessageHandler<A>>;
 
 #[async_trait]
 pub trait MessageProcessor<A: Actor> {
@@ -45,8 +30,8 @@ impl<A: Actor> DefaultMailbox<A> {
     pub fn new(buffer: usize) -> Self {
         let (sender, receiver) = mpsc::channel(buffer);
         Self {
-            sender: Some(MailboxSender { inner: sender }),
-            receiver: MailboxReceiver { inner: receiver },
+            sender: Some(sender),
+            receiver,
             _actor: PhantomData,
         }
     }
@@ -61,11 +46,11 @@ impl<A: Actor> Mailbox<A> for DefaultMailbox<A> {
 #[async_trait]
 impl<A: Actor> MessageProcessor<A> for DefaultMailbox<A> {
     async fn process_messages(&mut self, ctx: &mut ActorContext, actor: &mut A) {
-        while let Some(mut msg) = self.receiver.inner.recv().await {
+        while let Some(mut msg) = self.receiver.recv().await {
             match msg.handle(actor, ctx).await {
                 MessageHandlerResult::Stop { reason } => {
                     println!("stop: reason={reason}");
-                    self.receiver.inner.close();
+                    self.receiver.close();
                     ctx.system.stop_actor(&ctx.path).await;
                     break;
                 }

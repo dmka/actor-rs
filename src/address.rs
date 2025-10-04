@@ -67,9 +67,9 @@ impl<A: Actor> ActorRef<A> {
         Ok(())
     }
 
+    #[inline]
     async fn send(&self, msg: BoxedMessageHandler<A>) -> Result<()> {
         self.sender
-            .inner
             .send(msg)
             .await
             .map_err(|e| ActorError::SendError(e.to_string()))?;
@@ -78,7 +78,7 @@ impl<A: Actor> ActorRef<A> {
     }
 
     pub fn is_closed(&self) -> bool {
-        self.sender.inner.is_closed()
+        self.sender.is_closed()
     }
 }
 
