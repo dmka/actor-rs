@@ -34,11 +34,7 @@ impl<A: Actor> MailboxSender<A> {
         A: Handler<M>,
     {
         let envelope = Envelope::new(msg, None);
-        self.inner
-            .send(Box::new(envelope))
-            .await
-            .map_err(|e| ActorError::SendError(e.to_string()))?;
-
+        self.send(Box::new(envelope)).await?;
         Ok(())
     }
 
@@ -49,14 +45,10 @@ impl<A: Actor> MailboxSender<A> {
     {
         let (response_sender, response_receiver) = oneshot::channel();
         let envelope = Envelope::new(msg, Some(response_sender));
-        self.inner
-            .send(Box::new(envelope))
-            .await
-            .map_err(|e| ActorError::SendError(e.to_string()))?;
-
+        self.send(Box::new(envelope)).await?;
         response_receiver
             .await
-            .map_err(|error| ActorError::SendError(error.to_string()))
+            .map_err(|e| ActorError::SendError(e.to_string()))
     }
 
     pub(crate) async fn sys_tell<M>(&self, msg: M) -> Result<()>
@@ -65,10 +57,16 @@ impl<A: Actor> MailboxSender<A> {
         A: SystemHandler<M>,
     {
         let envelope = SystemEnvelope::new(msg, None);
+        self.send(Box::new(envelope)).await?;
+        Ok(())
+    }
+
+    async fn send(&self, msg: BoxedMessageHandler<A>) -> Result<()> {
         self.inner
-            .send(Box::new(envelope))
+            .send(msg)
             .await
             .map_err(|e| ActorError::SendError(e.to_string()))?;
+
         Ok(())
     }
 
