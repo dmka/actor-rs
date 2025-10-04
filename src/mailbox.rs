@@ -1,11 +1,13 @@
 use async_trait::async_trait;
 use std::marker::PhantomData;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 pub use crate::address::{ActorPath, ActorRef};
 pub use crate::handler::{BoxedMessageHandler, MessageHandler, MessageHandlerResult};
+use crate::handler::{SystemEnvelope, SystemHandler};
+use crate::{Message, Result, handler::Envelope};
 
-use crate::{Actor, ActorContext};
+use crate::{Actor, ActorContext, ActorError, Handler};
 
 #[derive(Debug)]
 pub struct MailboxReceiver<A: Actor> {
@@ -14,7 +16,7 @@ pub struct MailboxReceiver<A: Actor> {
 
 #[derive(Debug)]
 pub struct MailboxSender<A: Actor> {
-    pub(crate) inner: mpsc::Sender<BoxedMessageHandler<A>>,
+    inner: mpsc::Sender<BoxedMessageHandler<A>>,
 }
 
 impl<A: Actor> Clone for MailboxSender<A> {
@@ -22,6 +24,56 @@ impl<A: Actor> Clone for MailboxSender<A> {
         Self {
             inner: self.inner.clone(),
         }
+    }
+}
+
+impl<A: Actor> MailboxSender<A> {
+    pub async fn tell<M>(&self, msg: M) -> Result<()>
+    where
+        M: Message,
+        A: Handler<M>,
+    {
+        let envelope = Envelope::new(msg, None);
+        self.inner
+            .send(Box::new(envelope))
+            .await
+            .map_err(|e| ActorError::SendError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn ask<M>(&self, msg: M) -> Result<M::Response>
+    where
+        M: Message,
+        A: Handler<M>,
+    {
+        let (response_sender, response_receiver) = oneshot::channel();
+        let envelope = Envelope::new(msg, Some(response_sender));
+        self.inner
+            .send(Box::new(envelope))
+            .await
+            .map_err(|e| ActorError::SendError(e.to_string()))?;
+
+        response_receiver
+            .await
+            .map_err(|error| ActorError::SendError(error.to_string()))
+    }
+
+    pub(crate) async fn sys_tell<M>(&self, msg: M) -> Result<()>
+    where
+        M: Message,
+        A: SystemHandler<M>,
+    {
+        let envelope = SystemEnvelope::new(msg, None);
+        self.inner
+            .send(Box::new(envelope))
+            .await
+            .map_err(|e| ActorError::SendError(e.to_string()))?;
+        Ok(())
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.inner.is_closed()
     }
 }
 
