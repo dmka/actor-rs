@@ -46,15 +46,7 @@ impl<A: Actor> ActorRef<A> {
     }
 
     pub async fn poison(&self) -> Result<()> {
-        self.sys_tell(SysPoisonMessage).await
-    }
-
-    async fn sys_tell<M>(&self, msg: M) -> Result<()>
-    where
-        M: Message,
-        A: SystemHandler<M>,
-    {
-        self.sender.sys_tell(msg).await
+        self.sender.sys_tell(SysPoisonMessage).await
     }
 
     pub fn is_closed(&self) -> bool {
