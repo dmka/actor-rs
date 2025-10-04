@@ -3,7 +3,7 @@ use std::fmt::Display;
 use tokio::sync::oneshot;
 
 use crate::{
-    Actor, ActorError, BoxedMessageHandler, Handler, MailboxSender, Message, Result,
+    Actor, ActorError, BoxedMessageHandler, Handler, Message, Result, Sender,
     handler::{Envelope, SysPoisonMessage, SystemEnvelope, SystemHandler},
 };
 
@@ -19,11 +19,11 @@ impl Display for ActorPath {
 #[derive(Debug)]
 pub struct ActorRef<A: Actor> {
     path: ActorPath,
-    sender: MailboxSender<A>,
+    sender: Sender<A>,
 }
 
 impl<A: Actor> ActorRef<A> {
-    pub fn new(path: ActorPath, sender: MailboxSender<A>) -> Self {
+    pub fn new(path: ActorPath, sender: Sender<A>) -> Self {
         ActorRef { path, sender }
     }
 

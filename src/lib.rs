@@ -13,8 +13,8 @@ use async_trait::async_trait;
 pub use context::ActorContext;
 pub use error::{ActorError, Result};
 pub use mailbox::{
-    ActorPath, ActorRef, BoxedMessageHandler, DefaultMailbox, Mailbox, MailboxReceiver,
-    MailboxSender, MessageHandler, MessageHandlerResult, MessageProcessor,
+    ActorPath, ActorRef, BoxedMessageHandler, DefaultMailbox, Mailbox, MessageHandler,
+    MessageHandlerResult, MessageProcessor, Receiver, Sender,
 };
 pub use props::ActorProps;
 pub use spawner::{ActorSpawner, DefaultActorSpawner};

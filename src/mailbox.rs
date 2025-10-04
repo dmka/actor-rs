@@ -7,8 +7,8 @@ pub use crate::handler::{BoxedMessageHandler, MessageHandler, MessageHandlerResu
 
 use crate::{Actor, ActorContext};
 
-pub type MailboxReceiver<A> = mpsc::Receiver<BoxedMessageHandler<A>>;
-pub type MailboxSender<A> = mpsc::Sender<BoxedMessageHandler<A>>;
+pub type Receiver<A> = mpsc::Receiver<BoxedMessageHandler<A>>;
+pub type Sender<A> = mpsc::Sender<BoxedMessageHandler<A>>;
 
 #[async_trait]
 pub trait MessageProcessor<A: Actor> {
@@ -16,13 +16,13 @@ pub trait MessageProcessor<A: Actor> {
 }
 
 pub trait Mailbox<A: Actor>: MessageProcessor<A> + Send + 'static {
-    fn sender(&mut self) -> MailboxSender<A>;
+    fn sender(&mut self) -> Sender<A>;
 }
 
 #[derive(Debug)]
 pub struct DefaultMailbox<A: Actor> {
-    sender: Option<MailboxSender<A>>,
-    receiver: MailboxReceiver<A>,
+    sender: Option<Sender<A>>,
+    receiver: Receiver<A>,
     _actor: PhantomData<A>,
 }
 
@@ -38,7 +38,7 @@ impl<A: Actor> DefaultMailbox<A> {
 }
 
 impl<A: Actor> Mailbox<A> for DefaultMailbox<A> {
-    fn sender(&mut self) -> MailboxSender<A> {
+    fn sender(&mut self) -> Sender<A> {
         self.sender.take().unwrap()
     }
 }
