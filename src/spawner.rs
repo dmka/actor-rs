@@ -35,6 +35,8 @@ impl ActorSpawner for DefaultActorSpawner {
             mailbox.process_messages(&mut ctx, &mut actor).await;
 
             actor.post_stop(&mut ctx).await;
+
+            ctx.system.stop_actor(&ctx.path).await;
         });
 
         actor_ref

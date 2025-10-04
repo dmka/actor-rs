@@ -51,7 +51,6 @@ impl<A: Actor> MessageProcessor<A> for DefaultMailbox<A> {
                 MessageHandlerResult::Stop { reason } => {
                     println!("stop: reason={reason}");
                     self.receiver.close();
-                    ctx.system.stop_actor(&ctx.path).await;
                     break;
                 }
                 MessageHandlerResult::Timeout => {}
