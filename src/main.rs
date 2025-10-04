@@ -58,19 +58,21 @@ async fn main() {
 
     let sys = ActorSystem::new("main");
 
-    let spawner = DefaultActorSpawner::new();
-
     let a1 = sys
         .spawn_actor_path(
             ActorPath("/a1".into()),
             TestActor { counter: 0 },
-            spawner.clone(),
+            DefaultActorSpawner::new(100),
         )
         .await
         .unwrap();
 
     let a2 = sys
-        .spawn_actor_path(ActorPath("/a2".into()), TestActor { counter: 0 }, spawner)
+        .spawn_actor_path(
+            ActorPath("/a2".into()),
+            TestActor { counter: 0 },
+            DefaultActorSpawner::new(100),
+        )
         .await
         .unwrap();
 

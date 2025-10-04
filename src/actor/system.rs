@@ -1,7 +1,7 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, sync::Arc};
 use tokio::sync::RwLock;
 
-use crate::actor::{Actor, ActorContext, ActorError, ActorPath, ActorRef, ActorSpawner};
+use crate::actor::{Actor, ActorContext, ActorError, ActorPath, ActorRef, spawner::ActorSpawner};
 
 #[derive(Clone)]
 pub struct ActorSystem {

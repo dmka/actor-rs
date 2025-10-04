@@ -9,9 +9,31 @@ pub trait MessageHandler<A: Actor>: Send + Sync {
     async fn handle(&mut self, actor: &mut A, ctx: &mut ActorContext);
 }
 
-type BoxedMessageHandler<A> = Box<dyn MessageHandler<A>>;
-pub type MailboxReceiver<A> = mpsc::UnboundedReceiver<BoxedMessageHandler<A>>;
-type MailboxSender<A> = mpsc::UnboundedSender<BoxedMessageHandler<A>>;
+pub type BoxedMessageHandler<A> = Box<dyn MessageHandler<A>>;
+
+pub struct MailboxReceiver<A: Actor> {
+    inner: mpsc::Receiver<BoxedMessageHandler<A>>,
+}
+
+pub struct MailboxSender<A: Actor> {
+    inner: mpsc::Sender<BoxedMessageHandler<A>>,
+}
+
+impl<A: Actor> Clone for MailboxSender<A> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+pub trait MessageProcessor<A: Actor> {
+    async fn process_messages(&mut self, ctx: &mut ActorContext, actor: &mut A);
+}
+
+pub trait Mailbox<A: Actor>: MessageProcessor<A> {
+    fn sender(&self) -> MailboxSender<A>;
+}
 
 pub struct DefaultMailbox<A: Actor> {
     sender: MailboxSender<A>,
@@ -19,28 +41,26 @@ pub struct DefaultMailbox<A: Actor> {
     _actor: PhantomData<A>,
 }
 
-pub trait MessageProcessor<A: Actor> {
-    async fn process_messages(&mut self, ctx: &mut ActorContext, actor: &mut A);
-}
-
 impl<A: Actor> DefaultMailbox<A> {
-    pub fn new() -> Self {
-        let (sender, receiver) = mpsc::unbounded_channel();
+    pub fn new(buffer: usize) -> Self {
+        let (sender, receiver) = mpsc::channel(buffer);
         Self {
-            sender,
-            receiver,
+            sender: MailboxSender { inner: sender },
+            receiver: MailboxReceiver { inner: receiver },
             _actor: PhantomData,
         }
     }
+}
 
-    pub fn sender(&self) -> MailboxSender<A> {
+impl<A: Actor> Mailbox<A> for DefaultMailbox<A> {
+    fn sender(&self) -> MailboxSender<A> {
         self.sender.clone()
     }
 }
 
 impl<A: Actor> MessageProcessor<A> for DefaultMailbox<A> {
     async fn process_messages(&mut self, ctx: &mut ActorContext, actor: &mut A) {
-        while let Some(mut msg) = self.receiver.recv().await {
+        while let Some(mut msg) = self.receiver.inner.recv().await {
             msg.handle(actor, ctx).await;
         }
     }
@@ -89,7 +109,7 @@ where
 
 pub struct ActorRef<A: Actor> {
     path: ActorPath,
-    sender: mpsc::UnboundedSender<BoxedMessageHandler<A>>,
+    sender: MailboxSender<A>,
 }
 
 impl<A: Actor> ActorRef<A> {
@@ -101,13 +121,13 @@ impl<A: Actor> ActorRef<A> {
         &self.path
     }
 
-    pub fn tell<M>(&self, msg: M) -> Result<(), ActorError>
+    pub async fn tell<M>(&self, msg: M) -> Result<(), ActorError>
     where
         M: Message,
         A: Handler<M>,
     {
         let message = ActorMessage::new(msg, None);
-        if let Err(error) = self.sender.send(Box::new(message)) {
+        if let Err(error) = self.sender.inner.send(Box::new(message)).await {
             eprintln!("Failed to tell message! {}", error);
             Err(ActorError::SendError(error.to_string()))
         } else {
@@ -122,7 +142,7 @@ impl<A: Actor> ActorRef<A> {
     {
         let (response_sender, response_receiver) = oneshot::channel();
         let message = ActorMessage::new(msg, Some(response_sender));
-        if let Err(error) = self.sender.send(Box::new(message)) {
+        if let Err(error) = self.sender.inner.send(Box::new(message)).await {
             eprintln!("Failed to ask message! {}", error);
             Err(ActorError::SendError(error.to_string()))
         } else {
@@ -133,7 +153,7 @@ impl<A: Actor> ActorRef<A> {
     }
 
     pub fn is_closed(&self) -> bool {
-        self.sender.is_closed()
+        self.sender.inner.is_closed()
     }
 }
 

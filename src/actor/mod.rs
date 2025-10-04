@@ -1,17 +1,22 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
 
+mod context;
 mod mailbox;
 mod spawner;
 mod system;
 
-use std::{fmt::Display, marker::PhantomData};
+use std::fmt::Display;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use thiserror::Error;
 
-pub use mailbox::ActorRef;
-pub use spawner::{ActorSpawner, DefaultActorSpawner};
+pub use context::ActorContext;
+pub use mailbox::{
+    ActorRef, BoxedMessageHandler, DefaultMailbox, Mailbox, MailboxReceiver, MailboxSender,
+    MessageHandler, MessageProcessor,
+};
+pub use spawner::DefaultActorSpawner;
 pub use system::ActorSystem;
 
 pub trait Message: Send + Sync + 'static {
@@ -20,24 +25,24 @@ pub trait Message: Send + Sync + 'static {
 
 #[async_trait]
 pub trait Actor: Send + Sync + 'static {
-    async fn pre_start(&mut self, _ctx: &mut ActorContext) -> Result<(), ActorError> {
+    async fn pre_start(&mut self, _ctx: &mut context::ActorContext) -> Result<(), ActorError> {
         Ok(())
     }
 
     async fn pre_restart(
         &mut self,
-        ctx: &mut ActorContext,
+        ctx: &mut context::ActorContext,
         _error: Option<&ActorError>,
     ) -> Result<(), ActorError> {
         self.pre_start(ctx).await
     }
 
-    async fn post_stop(&mut self, _ctx: &mut ActorContext) {}
+    async fn post_stop(&mut self, _ctx: &mut context::ActorContext) {}
 }
 
 #[async_trait]
 pub trait Handler<M: Message>: Actor {
-    async fn handle(&mut self, msg: M, ctx: &mut ActorContext) -> M::Response;
+    async fn handle(&mut self, msg: M, ctx: &mut context::ActorContext) -> M::Response;
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -47,39 +52,6 @@ impl Display for ActorPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
-}
-
-pub struct ActorContext {
-    pub path: ActorPath,
-    pub system: system::ActorSystem,
-    _private: PhantomData<()>,
-}
-
-impl ActorContext {
-    pub async fn create_child<A: Actor, S: ActorSpawner<A>>(
-        &self,
-        name: &str,
-        actor: A,
-        spawner: S,
-    ) -> Result<ActorRef<A>, ActorError> {
-        let path = ActorPath(format!("{}/{}", self.path, name));
-        self.system.spawn_actor_path(path, actor, spawner).await
-    }
-
-    pub async fn get_child<A: Actor>(&self, name: &str) -> Option<ActorRef<A>> {
-        let path = ActorPath(format!("{}/{}", self.path, name));
-        self.system.get_actor(&path).await
-    }
-
-    pub async fn stop_child(&self, name: &str) {
-        let path = ActorPath(format!("{}/{}", self.path, name));
-        self.system.stop_actor(&path).await;
-    }
-}
-
-#[async_trait]
-trait MessageProcessor {
-    async fn process_message();
 }
 
 #[derive(Debug, Error)]
