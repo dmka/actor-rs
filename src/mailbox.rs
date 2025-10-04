@@ -43,10 +43,10 @@ impl<A: Actor> MailboxSender<A> {
         M: Message,
         A: Handler<M>,
     {
-        let (response_sender, response_receiver) = oneshot::channel();
-        let envelope = Envelope::new(msg, Some(response_sender));
+        let (reply_sender, reply_receiver) = oneshot::channel();
+        let envelope = Envelope::new(msg, Some(reply_sender));
         self.send(Box::new(envelope)).await?;
-        response_receiver
+        reply_receiver
             .await
             .map_err(|e| ActorError::SendError(e.to_string()))
     }
