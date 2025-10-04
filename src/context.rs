@@ -1,6 +1,9 @@
 use std::marker::PhantomData;
 
-use crate::{Actor, ActorPath, ActorProps, ActorRef, ActorSpawner, ActorSystem, Mailbox, Result};
+use crate::{
+    Actor, ActorPath, ActorProps, ActorRef, ActorSpawner, ActorSystem, DefaultActorSpawner,
+    DefaultMailbox, Mailbox, Result,
+};
 
 #[derive(Debug)]
 pub struct ActorContext {
@@ -10,23 +13,44 @@ pub struct ActorContext {
 }
 
 impl ActorContext {
-    pub async fn create_child<A: Actor, S: ActorSpawner, M: Mailbox<A>>(
+    pub async fn spawn<A: Actor, F: Fn() -> A>(
         &self,
         name: &str,
-        actor: A,
-        props: ActorProps<A, S, M>,
+        actor_fn: F,
+        buffer: usize,
     ) -> Result<ActorRef<A>> {
-        let path = ActorPath(format!("{}/{}", self.path, name));
-        self.system.spawn_actor_path(path, actor, props).await
+        let props = ActorProps::new(
+            actor_fn,
+            || Box::new(DefaultActorSpawner::new()),
+            || Box::new(DefaultMailbox::<A>::new(buffer)),
+        );
+
+        let child = self.path.join(name);
+        self.system.spawn_path(child, props).await
     }
 
-    pub async fn get_child<A: Actor>(&self, name: &str) -> Option<ActorRef<A>> {
-        let path = ActorPath(format!("{}/{}", self.path, name));
-        self.system.get_actor(&path).await
+    pub async fn spawn_props<A, F, S, M>(
+        &self,
+        name: &str,
+        props: ActorProps<A, F, S, M>,
+    ) -> Result<ActorRef<A>>
+    where
+        A: Actor,
+        F: Fn() -> A,
+        S: Fn() -> Box<dyn ActorSpawner<A>>,
+        M: Fn() -> Box<dyn Mailbox<A>>,
+    {
+        let child = self.path.join(name);
+        self.system.spawn_path(child, props).await
     }
 
-    pub async fn stop_child(&self, name: &str) {
-        let path = ActorPath(format!("{}/{}", self.path, name));
-        self.system.stop_actor(&path).await;
+    pub async fn get<A: Actor>(&self, name: &str) -> Option<ActorRef<A>> {
+        let child = self.path.join(name);
+        self.system.get(&child).await
+    }
+
+    pub async fn stop(&self, name: &str) {
+        let child = self.path.join(name);
+        self.system.stop_actor(&child).await;
     }
 }

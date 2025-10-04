@@ -113,26 +113,3 @@ where
         handler_result
     }
 }
-
-#[derive(Debug)]
-pub struct SysPoisonMessage;
-
-impl Message for SysPoisonMessage {
-    type Response = ();
-}
-
-#[async_trait]
-impl<A: Actor> SystemHandler<SysPoisonMessage> for A {
-    async fn handle(
-        &mut self,
-        _msg: SysPoisonMessage,
-        _ctx: &mut ActorContext,
-    ) -> ((), MessageHandlerResult) {
-        (
-            (),
-            MessageHandlerResult::Stop {
-                reason: "poisoned".into(),
-            },
-        )
-    }
-}

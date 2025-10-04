@@ -2,13 +2,14 @@ use async_trait::async_trait;
 use std::marker::PhantomData;
 use tokio::sync::mpsc;
 
-pub use crate::address::{ActorPath, ActorRef};
 pub use crate::handler::{BoxedMessageHandler, MessageHandler, MessageHandlerResult};
+pub use crate::reference::{ActorPath, ActorRef};
 
 use crate::{Actor, ActorContext};
 
 pub type Receiver<A> = mpsc::Receiver<BoxedMessageHandler<A>>;
 pub type Sender<A> = mpsc::Sender<BoxedMessageHandler<A>>;
+pub type WeakSender<A> = mpsc::WeakSender<BoxedMessageHandler<A>>;
 
 #[async_trait]
 pub trait MessageProcessor<A: Actor> {
@@ -48,11 +49,14 @@ impl<A: Actor> MessageProcessor<A> for DefaultMailbox<A> {
     async fn process_messages(&mut self, ctx: &mut ActorContext, actor: &mut A) {
         while let Some(mut msg) = self.receiver.recv().await {
             match msg.handle(actor, ctx).await {
-                MessageHandlerResult::Stop { reason } => {
-                    println!("stop: reason={reason}");
-                    self.receiver.close();
-                    break;
-                }
+                MessageHandlerResult::Stop { reason } => match actor.stopping(ctx, &reason).await {
+                    crate::StoppingResult::Stop => {
+                        println!("stop: reason={reason}");
+                        self.receiver.close();
+                        break;
+                    }
+                    crate::StoppingResult::Cancel => {}
+                },
                 MessageHandlerResult::Timeout => {}
                 MessageHandlerResult::None => {}
             }

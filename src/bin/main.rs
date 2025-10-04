@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use async_trait::async_trait;
 
 use actor_rs::prelude::*;
@@ -11,12 +9,12 @@ struct TestActor {
 
 #[async_trait]
 impl Actor for TestActor {
-    async fn pre_start(&mut self, ctx: &mut ActorContext) -> Result<()> {
+    async fn started(&mut self, ctx: &mut ActorContext) -> Result<()> {
         println!("->> starting {}", ctx.path);
         Ok(())
     }
 
-    async fn post_stop(&mut self, ctx: &mut ActorContext) {
+    async fn stopped(&mut self, ctx: &mut ActorContext) {
         println!("->> stopped {}", ctx.path);
     }
 }
@@ -42,12 +40,12 @@ async fn main() {
     let sys = ActorSystem::new();
     {
         let a1 = sys
-            .spawn_actor("a1", TestActor { counter: 0 }, 100)
+            .spawn("a1", || TestActor { counter: 0 }, 100)
             .await
             .unwrap();
 
         let a2 = sys
-            .spawn_actor("a2", TestActor { counter: 0 }, 100)
+            .spawn("a2", || TestActor { counter: 0 }, 100)
             .await
             .unwrap();
 
@@ -61,5 +59,4 @@ async fn main() {
         // sys.stop_actor(a1.path()).await;
         // sys.stop_actor(a2.path()).await;
     }
-    tokio::time::sleep(Duration::from_secs(1)).await;
 }
