@@ -1,9 +1,6 @@
 use std::fmt::Display;
 
-use crate::{
-    Actor, Handler, MailboxSender, Message, Result,
-    handler::{SysPoisonMessage, SystemHandler},
-};
+use crate::{Actor, Handler, MailboxSender, Message, Result, handler::SysPoisonMessage};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct ActorPath(pub String);
