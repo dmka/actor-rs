@@ -25,7 +25,7 @@ impl ActorSpawner for DefaultActorSpawner {
         mut actor: A,
         mut mailbox: M,
     ) -> ActorRef<A> {
-        let actor_ref = ActorRef::new(ctx.path.clone(), mailbox.sender());
+        let actor_ref = ActorRef::new(ctx.path.clone(), mailbox.take_sender());
 
         tokio::spawn(async move {
             if actor.pre_start(&mut ctx).await.is_err() {

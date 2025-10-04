@@ -16,7 +16,7 @@ pub trait MessageProcessor<A: Actor> {
 }
 
 pub trait Mailbox<A: Actor>: MessageProcessor<A> + Send + 'static {
-    fn sender(&mut self) -> Sender<A>;
+    fn take_sender(&mut self) -> Sender<A>;
 }
 
 #[derive(Debug)]
@@ -38,7 +38,7 @@ impl<A: Actor> DefaultMailbox<A> {
 }
 
 impl<A: Actor> Mailbox<A> for DefaultMailbox<A> {
-    fn sender(&mut self) -> Sender<A> {
+    fn take_sender(&mut self) -> Sender<A> {
         self.sender.take().unwrap()
     }
 }
