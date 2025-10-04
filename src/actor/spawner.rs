@@ -11,13 +11,12 @@ pub trait ActorSpawner {
     ) -> ActorRef<A>;
 }
 
-pub struct DefaultActorSpawner {
-    buffer: usize,
-}
+#[derive(Default)]
+pub struct DefaultActorSpawner;
 
 impl DefaultActorSpawner {
-    pub fn new(buffer: usize) -> Self {
-        Self { buffer }
+    pub fn new() -> Self {
+        Self
     }
 }
 

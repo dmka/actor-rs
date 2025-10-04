@@ -13,8 +13,8 @@ use thiserror::Error;
 
 pub use context::ActorContext;
 pub use mailbox::{
-    ActorRef, BoxedMessageHandler, DefaultMailbox, Mailbox, MailboxReceiver, MailboxSender,
-    MessageHandler, MessageProcessor,
+    ActorRef, BoxedMessageHandler, DefaultMailbox, HandlerResult, Mailbox, MailboxReceiver,
+    MailboxSender, MessageHandler, MessageProcessor,
 };
 pub use spawner::{ActorSpawner, DefaultActorSpawner};
 pub use system::ActorSystem;
@@ -42,7 +42,11 @@ pub trait Actor: Send + Sync + 'static {
 
 #[async_trait]
 pub trait Handler<M: Message>: Actor {
-    async fn handle(&mut self, msg: M, ctx: &mut context::ActorContext) -> M::Response;
+    async fn handle(
+        &mut self,
+        msg: M,
+        ctx: &mut context::ActorContext,
+    ) -> (M::Response, HandlerResult);
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -72,7 +76,7 @@ pub enum ActorError {
 pub struct ActorProps<A: Actor, S: ActorSpawner, M: Mailbox<A>> {
     spawner: S,
     mailbox: Option<M>,
-    actor: PhantomData<A>,
+    _actor: PhantomData<A>,
 }
 
 impl<A: Actor, S: ActorSpawner, M: Mailbox<A>> ActorProps<A, S, M> {
@@ -80,7 +84,19 @@ impl<A: Actor, S: ActorSpawner, M: Mailbox<A>> ActorProps<A, S, M> {
         Self {
             spawner,
             mailbox: Some(mailbox),
-            actor: PhantomData,
+            _actor: PhantomData,
         }
     }
+
+    pub(crate) fn spawn(&mut self, system: ActorSystem, path: ActorPath, actor: A) -> ActorRef<A> {
+        let ctx = ActorContext {
+            path: path.clone(),
+            system,
+            _private: PhantomData,
+        };
+
+        let mailbox = self.mailbox.take().unwrap();
+        self.spawner.spawn(ctx, actor, mailbox)
+    }
 }
+

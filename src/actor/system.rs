@@ -25,10 +25,7 @@ impl ActorSystem {
         actor: A,
         buffer: usize,
     ) -> Result<ActorRef<A>, ActorError> {
-        let props = ActorProps::new(
-            DefaultActorSpawner::new(buffer),
-            DefaultMailbox::new(buffer),
-        );
+        let props = ActorProps::new(DefaultActorSpawner::new(), DefaultMailbox::<A>::new(buffer));
 
         self.spawn_actor_path(ActorPath(name.into()), actor, props)
             .await
@@ -40,21 +37,12 @@ impl ActorSystem {
         actor: A,
         mut props: ActorProps<A, S, M>,
     ) -> Result<ActorRef<A>, ActorError> {
-        println!("Creating actor '{:?}' on system '{}'...", &path, &self.name);
-
         let mut actors = self.actors.write().await;
         if actors.contains_key(&path) {
             return Err(ActorError::Exists(path));
         }
 
-        let ctx = ActorContext {
-            path: path.clone(),
-            system: self.clone(),
-            _private: PhantomData,
-        };
-
-        let mailbox = props.mailbox.take().unwrap();
-        let actor_ref = props.spawner.spawn(ctx, actor, mailbox);
+        let actor_ref = props.spawn(self.clone(), path, actor);
 
         let path = actor_ref.path().clone();
         let any = Box::new(actor_ref.clone());
@@ -72,12 +60,11 @@ impl ActorSystem {
     }
 
     pub async fn stop_actor(&self, path: &ActorPath) {
-        println!("Stopping actor '{}' on system '{}'...", &path, &self.name);
         let mut paths: Vec<ActorPath> = vec![path.clone()];
         {
             let running_actors = self.actors.read().await;
             for running in running_actors.keys() {
-                if running.0.starts_with(&path.0) {
+                if path.0 != running.0 && running.0.starts_with(&path.0) {
                     paths.push(running.clone());
                 }
             }
@@ -86,6 +73,7 @@ impl ActorSystem {
         paths.reverse();
         let mut actors = self.actors.write().await;
         for path in &paths {
+            println!("removing {path}");
             actors.remove(path);
         }
     }

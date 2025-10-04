@@ -4,9 +4,15 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::actor::{Actor, ActorContext, ActorError, ActorPath, Handler, Message};
 
+pub enum HandlerResult {
+    None,
+    Stop { reason: String },
+    Timeout,
+}
+
 #[async_trait]
 pub trait MessageHandler<A: Actor>: Send + Sync {
-    async fn handle(&mut self, actor: &mut A, ctx: &mut ActorContext);
+    async fn handle(&mut self, actor: &mut A, ctx: &mut ActorContext) -> HandlerResult;
 }
 
 pub type BoxedMessageHandler<A> = Box<dyn MessageHandler<A>>;
@@ -32,12 +38,12 @@ pub trait MessageProcessor<A: Actor> {
     async fn process_messages(&mut self, ctx: &mut ActorContext, actor: &mut A);
 }
 
-pub trait Mailbox<A: Actor>: MessageProcessor<A> + Send + Sync + 'static {
-    fn sender(&self) -> MailboxSender<A>;
+pub trait Mailbox<A: Actor>: MessageProcessor<A> + Send + 'static {
+    fn sender(&mut self) -> MailboxSender<A>;
 }
 
 pub struct DefaultMailbox<A: Actor> {
-    sender: MailboxSender<A>,
+    sender: Option<MailboxSender<A>>,
     receiver: MailboxReceiver<A>,
     _actor: PhantomData<A>,
 }
@@ -46,7 +52,7 @@ impl<A: Actor> DefaultMailbox<A> {
     pub fn new(buffer: usize) -> Self {
         let (sender, receiver) = mpsc::channel(buffer);
         Self {
-            sender: MailboxSender { inner: sender },
+            sender: Some(MailboxSender { inner: sender }),
             receiver: MailboxReceiver { inner: receiver },
             _actor: PhantomData,
         }
@@ -54,8 +60,8 @@ impl<A: Actor> DefaultMailbox<A> {
 }
 
 impl<A: Actor> Mailbox<A> for DefaultMailbox<A> {
-    fn sender(&self) -> MailboxSender<A> {
-        self.sender.clone()
+    fn sender(&mut self) -> MailboxSender<A> {
+        self.sender.take().unwrap()
     }
 }
 
@@ -63,12 +69,21 @@ impl<A: Actor> Mailbox<A> for DefaultMailbox<A> {
 impl<A: Actor> MessageProcessor<A> for DefaultMailbox<A> {
     async fn process_messages(&mut self, ctx: &mut ActorContext, actor: &mut A) {
         while let Some(mut msg) = self.receiver.inner.recv().await {
-            msg.handle(actor, ctx).await;
+            match msg.handle(actor, ctx).await {
+                HandlerResult::Stop { reason } => {
+                    println!("stop: reason={reason}");
+                    self.receiver.inner.close();
+                    ctx.system.stop_actor(&ctx.path).await;
+                    break;
+                }
+                HandlerResult::Timeout => {}
+                HandlerResult::None => {}
+            }
         }
     }
 }
 
-pub struct ActorMessage<M, A>
+pub struct Envelope<M, A>
 where
     M: Message,
     A: Handler<M>,
@@ -78,13 +93,13 @@ where
     _actor: PhantomData<A>,
 }
 
-impl<M, A> ActorMessage<M, A>
+impl<M, A> Envelope<M, A>
 where
     M: Message,
     A: Handler<M>,
 {
     fn new(msg: M, reply_to: Option<oneshot::Sender<M::Response>>) -> Self {
-        ActorMessage {
+        Envelope {
             payload: Some(msg),
             reply_to,
             _actor: PhantomData,
@@ -93,19 +108,21 @@ where
 }
 
 #[async_trait]
-impl<M, A> MessageHandler<A> for ActorMessage<M, A>
+impl<M, A> MessageHandler<A> for Envelope<M, A>
 where
     M: Message,
     A: Handler<M>,
 {
-    async fn handle(&mut self, actor: &mut A, ctx: &mut ActorContext) {
-        let result = actor.handle(self.payload.take().unwrap(), ctx).await;
+    async fn handle(&mut self, actor: &mut A, ctx: &mut ActorContext) -> HandlerResult {
+        let (result, handler_result) = actor.handle(self.payload.take().unwrap(), ctx).await;
 
         if let Some(reply_to) = self.reply_to.take() {
             reply_to.send(result).unwrap_or_else(|_failed| {
                 eprintln!("Failed to send back response!");
             })
         }
+
+        handler_result
     }
 }
 
@@ -128,8 +145,8 @@ impl<A: Actor> ActorRef<A> {
         M: Message,
         A: Handler<M>,
     {
-        let message = ActorMessage::new(msg, None);
-        if let Err(error) = self.sender.inner.send(Box::new(message)).await {
+        let envelope = Envelope::new(msg, None);
+        if let Err(error) = self.sender.inner.send(Box::new(envelope)).await {
             eprintln!("Failed to tell message! {}", error);
             Err(ActorError::SendError(error.to_string()))
         } else {
@@ -143,8 +160,8 @@ impl<A: Actor> ActorRef<A> {
         A: Handler<M>,
     {
         let (response_sender, response_receiver) = oneshot::channel();
-        let message = ActorMessage::new(msg, Some(response_sender));
-        if let Err(error) = self.sender.inner.send(Box::new(message)).await {
+        let envelope = Envelope::new(msg, Some(response_sender));
+        if let Err(error) = self.sender.inner.send(Box::new(envelope)).await {
             eprintln!("Failed to ask message! {}", error);
             Err(ActorError::SendError(error.to_string()))
         } else {
@@ -152,6 +169,10 @@ impl<A: Actor> ActorRef<A> {
                 .await
                 .map_err(|error| ActorError::SendError(error.to_string()))
         }
+    }
+
+    pub async fn poison(&self) -> Result<(), ActorError> {
+        self.tell(PoisonMessage).await
     }
 
     pub fn is_closed(&self) -> bool {
@@ -165,5 +186,28 @@ impl<A: Actor> Clone for ActorRef<A> {
             path: self.path.clone(),
             sender: self.sender.clone(),
         }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct PoisonMessage;
+
+impl Message for PoisonMessage {
+    type Response = ();
+}
+
+#[async_trait]
+impl<A: Actor> Handler<PoisonMessage> for A {
+    async fn handle(
+        &mut self,
+        _msg: PoisonMessage,
+        _ctx: &mut ActorContext,
+    ) -> ((), HandlerResult) {
+        (
+            (),
+            HandlerResult::Stop {
+                reason: "poisoned".into(),
+            },
+        )
     }
 }
