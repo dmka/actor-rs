@@ -2,9 +2,7 @@ mod actor;
 
 use async_trait::async_trait;
 
-use crate::actor::{
-    Actor, ActorContext, ActorError, ActorPath, ActorSystem, DefaultActorSpawner, Handler, Message,
-};
+use crate::actor::{Actor, ActorContext, ActorError, ActorSystem, Handler, Message};
 
 #[derive(Default)]
 struct TestActor {
@@ -59,20 +57,12 @@ async fn main() {
     let sys = ActorSystem::new("main");
 
     let a1 = sys
-        .spawn_actor_path(
-            ActorPath("/a1".into()),
-            TestActor { counter: 0 },
-            DefaultActorSpawner::new(100),
-        )
+        .spawn_actor("a1", TestActor { counter: 0 }, 100)
         .await
         .unwrap();
 
     let a2 = sys
-        .spawn_actor_path(
-            ActorPath("/a2".into()),
-            TestActor { counter: 0 },
-            DefaultActorSpawner::new(100),
-        )
+        .spawn_actor("a2", TestActor { counter: 0 }, 100)
         .await
         .unwrap();
 

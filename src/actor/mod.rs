@@ -5,7 +5,7 @@ mod mailbox;
 mod spawner;
 mod system;
 
-use std::fmt::Display;
+use std::{fmt::Display, marker::PhantomData};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -16,7 +16,7 @@ pub use mailbox::{
     ActorRef, BoxedMessageHandler, DefaultMailbox, Mailbox, MailboxReceiver, MailboxSender,
     MessageHandler, MessageProcessor,
 };
-pub use spawner::DefaultActorSpawner;
+pub use spawner::{ActorSpawner, DefaultActorSpawner};
 pub use system::ActorSystem;
 
 pub trait Message: Send + Sync + 'static {
@@ -67,4 +67,20 @@ pub enum ActorError {
 
     #[error("Actor runtime error")]
     RuntimeError(anyhow::Error),
+}
+
+pub struct ActorProps<A: Actor, S: ActorSpawner, M: Mailbox<A>> {
+    spawner: S,
+    mailbox: Option<M>,
+    actor: PhantomData<A>,
+}
+
+impl<A: Actor, S: ActorSpawner, M: Mailbox<A>> ActorProps<A, S, M> {
+    pub fn new(spawner: S, mailbox: M) -> Self {
+        Self {
+            spawner,
+            mailbox: Some(mailbox),
+            actor: PhantomData,
+        }
+    }
 }

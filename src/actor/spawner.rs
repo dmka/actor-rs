@@ -1,40 +1,33 @@
 use std::marker::PhantomData;
 
-use crate::actor::{
-    Actor, ActorContext, ActorRef,
-    mailbox::{DefaultMailbox, Mailbox, MessageProcessor},
-};
+use crate::actor::{Actor, ActorContext, ActorRef, DefaultMailbox, Mailbox, MessageProcessor};
 
-pub trait ActorSpawner<A: Actor>: Clone {
-    fn spawn(&self, ctx: ActorContext, actor: A) -> ActorRef<A>;
+pub trait ActorSpawner {
+    fn spawn<A: Actor, M: Mailbox<A>>(
+        &self,
+        ctx: ActorContext,
+        actor: A,
+        mailbox: M,
+    ) -> ActorRef<A>;
 }
 
-pub struct DefaultActorSpawner<A: Actor> {
+pub struct DefaultActorSpawner {
     buffer: usize,
-    _actor: PhantomData<A>,
 }
 
-impl<A: Actor> DefaultActorSpawner<A> {
+impl DefaultActorSpawner {
     pub fn new(buffer: usize) -> Self {
-        Self {
-            buffer,
-            _actor: PhantomData,
-        }
+        Self { buffer }
     }
 }
 
-impl<A: Actor> Clone for DefaultActorSpawner<A> {
-    fn clone(&self) -> Self {
-        Self {
-            buffer: self.buffer,
-            _actor: self._actor,
-        }
-    }
-}
-
-impl<A: Actor> ActorSpawner<A> for DefaultActorSpawner<A> {
-    fn spawn(&self, mut ctx: ActorContext, mut actor: A) -> ActorRef<A> {
-        let mut mailbox = DefaultMailbox::new(self.buffer);
+impl ActorSpawner for DefaultActorSpawner {
+    fn spawn<A: Actor, M: Mailbox<A>>(
+        &self,
+        mut ctx: ActorContext,
+        mut actor: A,
+        mut mailbox: M,
+    ) -> ActorRef<A> {
         let actor_ref = ActorRef::new(ctx.path.clone(), mailbox.sender());
 
         tokio::spawn(async move {

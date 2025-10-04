@@ -1,7 +1,10 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, sync::Arc};
 use tokio::sync::RwLock;
 
-use crate::actor::{Actor, ActorContext, ActorError, ActorPath, ActorRef, spawner::ActorSpawner};
+use crate::actor::{
+    Actor, ActorContext, ActorError, ActorPath, ActorProps, ActorRef, DefaultActorSpawner,
+    DefaultMailbox, Mailbox, spawner::ActorSpawner,
+};
 
 #[derive(Clone)]
 pub struct ActorSystem {
@@ -16,11 +19,26 @@ impl ActorSystem {
         ActorSystem { name, actors }
     }
 
-    pub(crate) async fn spawn_actor_path<A: Actor, S: ActorSpawner<A>>(
+    pub async fn spawn_actor<A: Actor>(
+        &self,
+        name: &str,
+        actor: A,
+        buffer: usize,
+    ) -> Result<ActorRef<A>, ActorError> {
+        let props = ActorProps::new(
+            DefaultActorSpawner::new(buffer),
+            DefaultMailbox::new(buffer),
+        );
+
+        self.spawn_actor_path(ActorPath(name.into()), actor, props)
+            .await
+    }
+
+    pub(crate) async fn spawn_actor_path<A: Actor, S: ActorSpawner, M: Mailbox<A>>(
         &self,
         path: ActorPath,
         actor: A,
-        spawner: S,
+        mut props: ActorProps<A, S, M>,
     ) -> Result<ActorRef<A>, ActorError> {
         println!("Creating actor '{:?}' on system '{}'...", &path, &self.name);
 
@@ -35,7 +53,8 @@ impl ActorSystem {
             _private: PhantomData,
         };
 
-        let actor_ref = spawner.spawn(ctx, actor);
+        let mailbox = props.mailbox.take().unwrap();
+        let actor_ref = props.spawner.spawn(ctx, actor, mailbox);
 
         let path = actor_ref.path().clone();
         let any = Box::new(actor_ref.clone());

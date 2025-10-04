@@ -27,11 +27,12 @@ impl<A: Actor> Clone for MailboxSender<A> {
     }
 }
 
+#[async_trait]
 pub trait MessageProcessor<A: Actor> {
     async fn process_messages(&mut self, ctx: &mut ActorContext, actor: &mut A);
 }
 
-pub trait Mailbox<A: Actor>: MessageProcessor<A> {
+pub trait Mailbox<A: Actor>: MessageProcessor<A> + Send + Sync + 'static {
     fn sender(&self) -> MailboxSender<A>;
 }
 
@@ -58,6 +59,7 @@ impl<A: Actor> Mailbox<A> for DefaultMailbox<A> {
     }
 }
 
+#[async_trait]
 impl<A: Actor> MessageProcessor<A> for DefaultMailbox<A> {
     async fn process_messages(&mut self, ctx: &mut ActorContext, actor: &mut A) {
         while let Some(mut msg) = self.receiver.inner.recv().await {
@@ -99,8 +101,8 @@ where
     async fn handle(&mut self, actor: &mut A, ctx: &mut ActorContext) {
         let result = actor.handle(self.payload.take().unwrap(), ctx).await;
 
-        if let Some(rsvp) = self.reply_to.take() {
-            rsvp.send(result).unwrap_or_else(|_failed| {
+        if let Some(reply_to) = self.reply_to.take() {
+            reply_to.send(result).unwrap_or_else(|_failed| {
                 eprintln!("Failed to send back response!");
             })
         }
