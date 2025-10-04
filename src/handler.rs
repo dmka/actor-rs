@@ -115,17 +115,17 @@ where
 }
 
 #[derive(Debug)]
-pub struct PoisonMessage;
+pub struct SysPoisonMessage;
 
-impl Message for PoisonMessage {
+impl Message for SysPoisonMessage {
     type Response = ();
 }
 
 #[async_trait]
-impl<A: Actor> SystemHandler<PoisonMessage> for A {
+impl<A: Actor> SystemHandler<SysPoisonMessage> for A {
     async fn handle(
         &mut self,
-        _msg: PoisonMessage,
+        _msg: SysPoisonMessage,
         _ctx: &mut ActorContext,
     ) -> ((), MessageHandlerResult) {
         (

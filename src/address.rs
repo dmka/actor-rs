@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     Actor, Handler, MailboxSender, Message, Result,
-    handler::{PoisonMessage, SystemHandler},
+    handler::{SysPoisonMessage, SystemHandler},
 };
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -46,7 +46,7 @@ impl<A: Actor> ActorRef<A> {
     }
 
     pub async fn poison(&self) -> Result<()> {
-        self.sys_tell(PoisonMessage).await
+        self.sys_tell(SysPoisonMessage).await
     }
 
     async fn sys_tell<M>(&self, msg: M) -> Result<()>
