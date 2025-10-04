@@ -1,10 +1,8 @@
-mod actor;
-
 use std::time::Duration;
 
 use async_trait::async_trait;
 
-use crate::actor::{Actor, ActorContext, ActorError, ActorSystem, Handler, HandlerResult, Message};
+use actor_rs::prelude::*;
 
 #[derive(Default)]
 struct TestActor {
@@ -13,7 +11,7 @@ struct TestActor {
 
 #[async_trait]
 impl Actor for TestActor {
-    async fn pre_start(&mut self, ctx: &mut ActorContext) -> Result<(), ActorError> {
+    async fn pre_start(&mut self, ctx: &mut ActorContext) -> Result<()> {
         println!("->> starting {}", ctx.path);
         Ok(())
     }
@@ -32,20 +30,16 @@ impl Message for TestMessage {
 
 #[async_trait]
 impl Handler<TestMessage> for TestActor {
-    async fn handle(
-        &mut self,
-        msg: TestMessage,
-        _ctx: &mut ActorContext,
-    ) -> (usize, HandlerResult) {
+    async fn handle(&mut self, msg: TestMessage, _ctx: &mut ActorContext) -> usize {
         self.counter += 1;
         println!("->> WORKS!");
-        (msg.0, HandlerResult::None)
+        msg.0
     }
 }
 
 #[tokio::main]
 async fn main() {
-    let sys = ActorSystem::new("main");
+    let sys = ActorSystem::new();
     {
         let a1 = sys
             .spawn_actor("a1", TestActor { counter: 0 }, 100)

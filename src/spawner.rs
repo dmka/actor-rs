@@ -1,6 +1,4 @@
-use std::marker::PhantomData;
-
-use crate::actor::{Actor, ActorContext, ActorRef, DefaultMailbox, Mailbox, MessageProcessor};
+use crate::{Actor, ActorContext, ActorRef, Mailbox};
 
 pub trait ActorSpawner {
     fn spawn<A: Actor, M: Mailbox<A>>(

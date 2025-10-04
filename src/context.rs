@@ -1,9 +1,8 @@
 use std::marker::PhantomData;
 
-use crate::actor::{
-    Actor, ActorError, ActorPath, ActorProps, ActorRef, ActorSpawner, ActorSystem, Mailbox,
-};
+use crate::{Actor, ActorPath, ActorProps, ActorRef, ActorSpawner, ActorSystem, Mailbox, Result};
 
+#[derive(Debug)]
 pub struct ActorContext {
     pub path: ActorPath,
     pub system: ActorSystem,
@@ -16,7 +15,7 @@ impl ActorContext {
         name: &str,
         actor: A,
         props: ActorProps<A, S, M>,
-    ) -> Result<ActorRef<A>, ActorError> {
+    ) -> Result<ActorRef<A>> {
         let path = ActorPath(format!("{}/{}", self.path, name));
         self.system.spawn_actor_path(path, actor, props).await
     }

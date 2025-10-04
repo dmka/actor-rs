@@ -1,22 +1,26 @@
-use std::{any::Any, collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{any::Any, collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
-use crate::actor::{
-    Actor, ActorContext, ActorError, ActorPath, ActorProps, ActorRef, DefaultActorSpawner,
-    DefaultMailbox, Mailbox, spawner::ActorSpawner,
+use crate::{
+    Actor, ActorError, ActorPath, ActorProps, ActorRef, DefaultActorSpawner, DefaultMailbox,
+    Mailbox, Result, spawner::ActorSpawner,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ActorSystem {
-    name: String,
     actors: Arc<RwLock<HashMap<ActorPath, Box<dyn Any + Send + Sync + 'static>>>>,
 }
 
+impl Default for ActorSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ActorSystem {
-    pub fn new(name: &str) -> Self {
-        let name = name.to_string();
+    pub fn new() -> Self {
         let actors = Arc::new(RwLock::new(HashMap::new()));
-        ActorSystem { name, actors }
+        ActorSystem { actors }
     }
 
     pub async fn spawn_actor<A: Actor>(
@@ -24,7 +28,7 @@ impl ActorSystem {
         name: &str,
         actor: A,
         buffer: usize,
-    ) -> Result<ActorRef<A>, ActorError> {
+    ) -> Result<ActorRef<A>> {
         let props = ActorProps::new(DefaultActorSpawner::new(), DefaultMailbox::<A>::new(buffer));
 
         self.spawn_actor_path(ActorPath(name.into()), actor, props)
@@ -36,7 +40,7 @@ impl ActorSystem {
         path: ActorPath,
         actor: A,
         mut props: ActorProps<A, S, M>,
-    ) -> Result<ActorRef<A>, ActorError> {
+    ) -> Result<ActorRef<A>> {
         let mut actors = self.actors.write().await;
         if actors.contains_key(&path) {
             return Err(ActorError::Exists(path));
