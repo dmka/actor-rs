@@ -7,8 +7,8 @@ pub use crate::handler::{BoxedMessageHandler, MessageHandler, MessageHandlerResu
 
 use crate::{Actor, ActorContext};
 
-pub type MailboxReceiver<A: Actor> = mpsc::Receiver<BoxedMessageHandler<A>>;
-pub type MailboxSender<A: Actor> = mpsc::Sender<BoxedMessageHandler<A>>;
+pub type MailboxReceiver<A> = mpsc::Receiver<BoxedMessageHandler<A>>;
+pub type MailboxSender<A> = mpsc::Sender<BoxedMessageHandler<A>>;
 
 #[async_trait]
 pub trait MessageProcessor<A: Actor> {
